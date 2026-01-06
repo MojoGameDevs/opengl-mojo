@@ -19,26 +19,25 @@ version = "0.1.*"
 name = "opengl"
 
 [package.host-dependencies]
-mojo-compiler = "0.25.7.*"
+mojo-compiler = ">=0.26.1.0.dev2026010605,<0.27"
 
 [package.build-dependencies]
-mojo-compiler = "0.25.7.*"
+mojo-compiler = ">=0.26.1.0.dev2026010605,<0.27"
 
 [package.run-dependencies]
-mojo-compiler = "0.25.7.*"
+mojo-compiler = ">=0.26.1.0.dev2026010605,<0.27"
 
 [tasks]
 fmt = "mojo format -l 1000 src"
 gen = "python gen.py"
-pkg = "mojo package src -o opengl.mojopkg"
+pkg = "mojo package src -o examples/opengl.mojopkg"
 build = {depends-on = ["gen", "fmt", "pkg"]}
 test = "mojo run examples/hello.mojo"
 
 [dependencies]
-mojo = "0.25.7.*"
 libopengl = ">=1.7.0,<2"
-sdl-mojo = {git = "https://github.com/ssslakter/sdl-mojo"}
-opengl-mojo = {path = "."}
+sdl-mojo = {git = "https://github.com/MojoGameDevs/sdl-mojo"}
+mojo = ">=0.26.1.0.dev2026010605,<0.27"
 
 [feature.dev.pypi-dependencies]
 ipython = "*"
