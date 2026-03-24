@@ -1,3 +1,6 @@
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+![CodeQL](https://github.com/MojoGameDevs/opengl-mojo/workflows/CodeQL/badge.svg)
+
 # Bindings for OpenGL in Mojo
 This library generates and provides bindings for OpenGL in mojo.
 This code is far from production ready, so if you find any issues, please open a github issue.
