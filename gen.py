@@ -63,9 +63,7 @@ extra_groups = [
 
 def to_snake_case(string: str) -> str:
     string = re.sub(r"(\d)D\b", r"_\1d", string)
-    return re.sub(
-        r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", string
-    ).lower()
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "_", string).lower()
 
 
 @dataclass
@@ -122,13 +120,11 @@ class EnumItem:
     def from_xml(cls, enum_elem: ET.Element) -> "EnumItem":
         name = enum_elem.get("name")
         value = enum_elem.get("value")
-        return cls(
-            name=name, value=value, groups=enum_elem.attrib.get("group", "").split(",")
-        )
+        return cls(name=name, value=value, groups=enum_elem.attrib.get("group", "").split(","))
 
     @property
     def mojo_name(self):
-        return self.name.removeprefix("GL_")
+        return self.name
 
     def __str__(self):
         return f"comptime {self.mojo_name} = {self.value}"
@@ -136,14 +132,13 @@ class EnumItem:
 
 enums_template = """
 @fieldwise_init
-@register_passable('trivial')
-struct {name}(Intable):
+struct {name}(Intable, TrivialRegisterPassable):
     var value: {dtype}
     
     {aliases}
     
     @always_inline
-    fn __int__(self) -> Int:
+    def __int__(self) -> Int:
         return Int(self.value)
 """
 
@@ -153,18 +148,14 @@ def generate_enum(name: str, registry: "OpenGLRegistry") -> str:
         return ""
     dtype = registry.current_groups[name]
     dtype = dtype.type if dtype else "GLenum"
-    aliases = "\n    ".join(
-        f"comptime {e.mojo_name} = {name}({e.value})"
-        for e in registry.enums.values()
-        if name in e.groups
-    )
+    aliases = "\n    ".join(f"comptime {e.mojo_name} = {name}({e.value})" for e in registry.enums.values() if name in e.groups)
     if not aliases:
         return ""
     res = enums_template.format(name=name, dtype=dtype, aliases=aliases)
     if dtype == "GLbitfield":
         res += """
     @always_inline
-    fn __or__(lhs, rhs: Self) -> Self:
+    def __or__(lhs, rhs: Self) -> Self:
         return Self(lhs.value | rhs.value)
 """
     return res
@@ -209,11 +200,7 @@ class CommandParam(CommandEl):
         match_variable = re.compile(
             r"^\s*(?P<const_spec>const\s+)?(?P<type>(?:_cl_event|\w+))\s*(?P<raw_ptrs>.*?)\s*(?P<name>\w+)\s*;?\s*$"
         )
-        match = match_variable.match(
-            ET.tostring(param_elem, method="text", encoding="unicode")
-            .replace("struct", "")
-            .strip()
-        )
+        match = match_variable.match(ET.tostring(param_elem, method="text", encoding="unicode").replace("struct", "").strip())
         param_name = match.group("name")
         if param_name in ["ref", "in"]:
             param_name += "_"
@@ -280,13 +267,8 @@ class Command:
 
         return_type = ReturnType.from_xml(proto_elem)
 
-        params = [
-            CommandParam.from_xml(param_elem)
-            for param_elem in cmd_elem.findall("param")
-        ]
-        return cls(
-            name=proto_elem.find("name").text, return_type=return_type, params=params
-        )
+        params = [CommandParam.from_xml(param_elem) for param_elem in cmd_elem.findall("param")]
+        return cls(name=proto_elem.find("name").text, return_type=return_type, params=params)
 
     def __str__(self):
         """Converts command to Mojo function declaration"""
@@ -295,12 +277,14 @@ class Command:
     """
 
     def _fn_str(self, anon=False):
-        res = "fn "
+        res = "def "
         if not anon:
             res += f" {self.mojo_name()}"
         res += f"({', '.join(p.to_mojo_arg(anon=anon) for p in self.params)})"
         if not anon:
             res += " raises"
+        else:
+            res += " thin"
         if self.return_type:
             res += f" -> {self.return_type}"
         return res
@@ -314,7 +298,7 @@ class Command:
             call_args[call_args.index(str_list.get_call_expr())] = "c_list.steal_data()"
             body += f"""\n    var c_list = [str.as_c_string_slice().unsafe_ptr().as_any_origin() for ref str in {to_snake_case(str_list.name)}]"""
         body += f"""
-    return get_fn[{self.inner_name()}, "{self.name}"]()({', '.join(call_args)})
+    return get_fn[{self.inner_name()}, "{self.name}"]()({", ".join(call_args)})
 """
         return body
 
@@ -364,11 +348,11 @@ class Feature:
         )
 
     def init_fns(self, registry: "OpenGLRegistry") -> str:
-        return f'''
-fn init_{self.name.lower()}(load: LoadProc) raises:
+        return f"""
+def init_{self.name.lower()}(load: LoadProc) raises:
     table = func_table.get_or_create_ptr()
-    {'\n    '.join(f.fn_init() for f in registry.current_commands if f.name in self.require)}
-    '''
+    {"\n    ".join(f.fn_init() for f in registry.current_commands if f.name in self.require)}
+    """
 
 
 def parse_types(root: ET.Element) -> Dict[str, Type]:
@@ -389,26 +373,9 @@ class OpenGLRegistry:
         self.apis = set(feat.attrib["api"] for feat in root.findall("feature"))
 
         self.types = parse_types(root)
-        self.enums = {
-            enum.name: enum
-            for enum in [
-                EnumItem.from_xml(enum_elem) for enum_elem in root.findall("enums/enum")
-            ]
-        }
-        self.commands = {
-            cmd.name: cmd
-            for cmd in [
-                Command.from_xml(cmd_elem)
-                for cmd_elem in root.findall("commands/command")
-            ]
-        }
-        self.features = {
-            api: [
-                Feature.from_xml(feat)
-                for feat in root.findall(f"feature[@api='{api}']")
-            ]
-            for api in self.apis
-        }
+        self.enums = {enum.name: enum for enum in [EnumItem.from_xml(enum_elem) for enum_elem in root.findall("enums/enum")]}
+        self.commands = {cmd.name: cmd for cmd in [Command.from_xml(cmd_elem) for cmd_elem in root.findall("commands/command")]}
+        self.features = {api: [Feature.from_xml(feat) for feat in root.findall(f"feature[@api='{api}']")] for api in self.apis}
         self.fix_features_require()
         self.current_features: List[Feature] = []
         self.current_commands: List[Command] = []
@@ -429,9 +396,7 @@ class OpenGLRegistry:
     def select_opengl_symbols(self, api: str, version: str = None, core: bool = True):
         """Select OpenGL symbols for a given API and version"""
         if api not in self.features:
-            raise ValueError(
-                f"API {api} does not exist, valid APIs are {', '.join(self.features.keys())}"
-            )
+            raise ValueError(f"API {api} does not exist, valid APIs are {', '.join(self.features.keys())}")
         if not version:
             version = self.features[api][-1].number
         features = [f for f in self.features[api] if f.number <= version]
@@ -439,21 +404,10 @@ class OpenGLRegistry:
         if core:
             res.require -= res.remove
         self.current_features = features
-        self.current_commands = [
-            cmd for cmd in self.commands.values() if cmd.name in res.require
-        ]
-        self.current_groups = {
-            cmp.group: cmp
-            for cmd in self.current_commands
-            for cmp in cmd.params + [cmd.return_type]
-            if cmp.group
-        }
+        self.current_commands = [cmd for cmd in self.commands.values() if cmd.name in res.require]
+        self.current_groups = {cmp.group: cmp for cmd in self.current_commands for cmp in cmd.params + [cmd.return_type] if cmp.group}
         self.current_groups.update({g: None for g in extra_groups})
-        types = set(
-            p.type
-            for cmd in self.current_commands
-            for p in [*cmd.params, cmd.return_type]
-        )
+        types = set(p.type for cmd in self.current_commands for p in [*cmd.params, cmd.return_type])
         self.current_types = [self.types[t] for t in types if t in self.types]
 
 
@@ -469,9 +423,9 @@ def generate_mojo_file(registry: OpenGLRegistry, path: str):
 
         f.write(
             """
-from sys.ffi import _Global, c_char, c_int, c_uint, c_short, c_ushort, c_size_t, c_ssize_t, c_float, c_double
-from memory import OpaquePointer
-from os import abort
+from std.ffi import _Global, c_char, c_int, c_uint, c_short, c_ushort, c_size_t, c_ssize_t, c_float, c_double
+from std.memory import OpaquePointer
+from std.os import abort
 comptime Ptr = UnsafePointer
 
 # ========= TYPES =========\n\n"""
@@ -480,7 +434,7 @@ comptime Ptr = UnsafePointer
             f.write(f"{type}\n")
         f.write(
             """
-comptime GLDEBUGPROC = fn(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar], userParam: OpaquePointer)
+comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar], userParam: OpaquePointer)
 """
         )
         f.write(
@@ -493,16 +447,16 @@ comptime GLDEBUGPROC = fn(source: GLenum, type: GLenum, id: GLuint, severity: GL
             f"""
 # ========= COMMANDS =========
 
-comptime LoadProc  = fn(var proc: String) raises -> fn() -> None
+comptime LoadProc  = def(var proc: String) raises -> def() -> None
 comptime FuncPtr = ImmutOpaquePointer[ImmutOrigin.external]
 
-fn _init_empty_table() -> Dict[String, FuncPtr]:
+def _init_empty_table() -> Dict[String, FuncPtr]:
     return {{}}
 comptime func_table = _Global["table", _init_empty_table]()
 
 
 @always_inline
-fn load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
+def load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
     var func = load(name)
     var addr = UnsafePointer(to=func).bitcast[FuncPtr]()[]
     if not addr:
@@ -511,7 +465,7 @@ fn load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
 
 
 @always_inline
-fn get_fn[fn_type: AnyTrivialRegType, name: StaticString]() raises -> fn_type:
+def get_fn[fn_type: AnyTrivialRegType, name: StaticString]() raises -> fn_type:
     var ptr = func_table.get_or_create_ptr()[][name]
     return UnsafePointer(to=ptr).bitcast[fn_type]()[] 
 """
@@ -528,8 +482,8 @@ fn get_fn[fn_type: AnyTrivialRegType, name: StaticString]() raises -> fn_type:
         f.write(
             f"""
 # ========= INIT =========
-fn init_opengl(load: LoadProc) raises:
-    {'\n    '.join([f'init_{feat.name.lower()}(load)' for feat in registry.current_features])}
+def init_opengl(load: LoadProc) raises:
+    {"\n    ".join([f"init_{feat.name.lower()}(load)" for feat in registry.current_features])}
     """
         )
 
