@@ -245,7 +245,7 @@ class CommandParam(CommandEl):
         """Returns the expression for calling the function pointer"""
         snake_name = to_snake_case(self.name)
         if "GLchar" in self.type:
-            return f"{snake_name}.as_c_string_slice().unsafe_ptr().as_any_origin()"
+            return f"UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int({snake_name}.as_c_string_slice().unsafe_ptr()))"
         if "Bool" in self.to_mojo_arg():
             return f"GLboolean(Int({snake_name}))"
         return snake_name
@@ -295,8 +295,8 @@ class Command:
         body = ""
         if str_list:
             str_list = str_list[0]
-            call_args[call_args.index(str_list.get_call_expr())] = "c_list.steal_data()"
-            body += f"""\n    var c_list = [str.as_c_string_slice().unsafe_ptr().as_any_origin() for ref str in {to_snake_case(str_list.name)}]"""
+            call_args[call_args.index(str_list.get_call_expr())] = "UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr()))"
+            body += f"""\n    var c_list = [UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().unsafe_ptr())) for ref str in {to_snake_case(str_list.name)}]"""
         body += f"""
     return get_fn[{self.inner_name()}, "{self.name}"]()({", ".join(call_args)})
 """
@@ -434,7 +434,7 @@ comptime Ptr = UnsafePointer
             f.write(f"{type}\n")
         f.write(
             """
-comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar], userParam: OpaquePointer)
+comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar, ImmutAnyOrigin], user_param: OpaquePointer) thin abi("C")
 """
         )
         f.write(
@@ -447,8 +447,8 @@ comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: G
             f"""
 # ========= COMMANDS =========
 
-comptime LoadProc  = def(var proc: String) raises -> def() -> None
-comptime FuncPtr = ImmutOpaquePointer[ImmutOrigin.external]
+comptime LoadProc = def(String) thin raises -> def() thin abi("C") -> None
+comptime FuncPtr = ImmOpaquePointer[ImmUntrackedOrigin]
 
 def _init_empty_table() -> Dict[String, FuncPtr]:
     return {{}}
@@ -459,13 +459,11 @@ comptime func_table = _Global["table", _init_empty_table]()
 def load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
     var func = load(name)
     var addr = UnsafePointer(to=func).bitcast[FuncPtr]()[]
-    if not addr:
-        raise Error("Failed to load function " + name)
     return addr
 
 
 @always_inline
-def get_fn[fn_type: AnyTrivialRegType, name: StaticString]() raises -> fn_type:
+def get_fn[fn_type: ImplicitlyCopyable, name: StaticString]() raises -> fn_type:
     var ptr = func_table.get_or_create_ptr()[][name]
     return UnsafePointer(to=ptr).bitcast[fn_type]()[] 
 """
