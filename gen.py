@@ -215,7 +215,11 @@ class CommandParam(CommandEl):
     def to_mojo_arg(self, anon=False):
         """Converts command parameter to Mojo function argument"""
         if anon:
-            return self.to_mojo_arg_inner()
+            result = self.to_mojo_arg_inner()
+            if self.is_nullable_pointer():
+                name, type = result.split(": ", 1)
+                return f"{name}: Optional[{type}]"
+            return result
         name = to_snake_case(self.name)
         type = self.to_mojo_arg_inner().split(": ")[1]
         if "GLchar" in type:
@@ -225,7 +229,23 @@ class CommandParam(CommandEl):
                 type = "List[String]"
         if type == "GLboolean":
             type = type.replace("GLboolean", "Bool")
+        elif self.ptrs:
+            type = re.sub(
+                r"(?:Immut|Mut)AnyOrigin\]$",
+                f"O_{to_snake_case(self.name)}]",
+                type,
+            )
+        if self.is_nullable_pointer():
+            type = f"Optional[{type}]"
         return f"{name}: {type}"
+
+    def is_nullable_pointer(self) -> bool:
+        return self.type == "void" and len(re.findall(r"\*", self.ptrs)) == 1
+
+    def origin_generic(self) -> str:
+        if self.ptrs and "GLchar" not in self.type:
+            return f"O_{to_snake_case(self.name)}: Origin"
+        return ""
 
     def to_mojo_arg_inner(self):
         """Converts command parameter to Mojo function argument"""
@@ -244,11 +264,26 @@ class CommandParam(CommandEl):
     def get_call_expr(self) -> str:
         """Returns the expression for calling the function pointer"""
         snake_name = to_snake_case(self.name)
+        if self.is_nullable_pointer():
+            return f"ffi_{snake_name}"
         if "GLchar" in self.type:
             return f"UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int({snake_name}.as_c_string_slice().unsafe_ptr()))"
         if "Bool" in self.to_mojo_arg():
             return f"GLboolean(Int({snake_name}))"
+        if self.ptrs:
+            ffi_type = self.to_mojo_arg_inner().split(": ", 1)[1]
+            return f"{ffi_type}(unsafe_from_address=Int({snake_name}))"
         return snake_name
+
+    def ffi_setup(self) -> str:
+        if not self.is_nullable_pointer():
+            return ""
+        name = to_snake_case(self.name)
+        ffi_type = self.to_mojo_arg_inner().split(": ", 1)[1]
+        return f"""
+    var ffi_{name}: Optional[{ffi_type}] = None
+    if {name}:
+        ffi_{name} = {ffi_type}(unsafe_from_address=Int({name}.value()))"""
 
 
 @dataclass
@@ -280,11 +315,14 @@ class Command:
         res = "def "
         if not anon:
             res += f" {self.mojo_name()}"
+        generics = [p.origin_generic() for p in self.params if p.origin_generic()] if not anon else []
+        if generics:
+            res += f"[{', '.join(g for g in generics if g)}, //]"
         res += f"({', '.join(p.to_mojo_arg(anon=anon) for p in self.params)})"
         if not anon:
             res += " raises"
         else:
-            res += " thin"
+            res += ' thin abi("C")'
         if self.return_type:
             res += f" -> {self.return_type}"
         return res
@@ -292,7 +330,7 @@ class Command:
     def fn_body(self):
         call_args = [p.get_call_expr() for p in self.params]
         str_list = [p for p in self.params if "List" in p.to_mojo_arg()]
-        body = ""
+        body = "".join(p.ffi_setup() for p in self.params)
         if str_list:
             str_list = str_list[0]
             call_args[call_args.index(str_list.get_call_expr())] = "UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr()))"
@@ -450,7 +488,7 @@ comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: G
 comptime LoadProc = def(String) thin raises -> def() thin abi("C") -> None
 comptime FuncPtr = ImmOpaquePointer[ImmUntrackedOrigin]
 
-def _init_empty_table() -> Dict[String, FuncPtr]:
+def _init_empty_table() -> Dict[StaticString, FuncPtr]:
     return {{}}
 comptime func_table = _Global["table", _init_empty_table]()
 
@@ -458,8 +496,7 @@ comptime func_table = _Global["table", _init_empty_table]()
 @always_inline
 def load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
     var func = load(name)
-    var addr = UnsafePointer(to=func).bitcast[FuncPtr]()[]
-    return addr
+    return UnsafePointer(to=func).bitcast[FuncPtr]()[]
 
 
 @always_inline
