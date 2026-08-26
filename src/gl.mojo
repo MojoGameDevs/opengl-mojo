@@ -2,11 +2,11 @@
 # | OpenGL bindings for Mojo
 # x-------------------------------------------x #
 
-from std.ffi import _Global, c_char, c_int, c_uint, c_short, c_ushort, c_size_t, c_ssize_t, c_float, c_double
+from std.ffi import CStringSlice, _Global, c_char, c_int, c_uint, c_short, c_ushort, c_size_t, c_ssize_t, c_float, c_double
 from std.memory import OpaquePointer
 from std.os import abort
 
-comptime Ptr = UnsafePointer
+comptime Ptr = Pointer
 
 # ========= TYPES =========
 
@@ -38,7 +38,13 @@ comptime GLuint = c_uint
 comptime GLuint64 = UInt64
 comptime GLushort = UInt16
 
-comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar, ImmutAnyOrigin], user_param: OpaquePointer) thin abi("C")
+comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar, ImmutAnyOrigin], user_param: OpaquePointer[MutUntrackedOrigin]) thin abi("C")
+
+
+def gl_string[origin: ImmOrigin, //](ptr: Ptr[mut=False, GLubyte, origin]) -> String:
+    """Copies a null terminated string owned by the driver into an owned String."""
+    return String(StringSpan(unsafe_from_utf8=CStringSlice(unsafe_from_ptr=ptr.unsafe_bitcast[c_char]())))
+
 
 # ========= ENUMS =========
 
@@ -430,6 +436,7 @@ struct BufferStorageMask(Intable, TrivialRegisterPassable):
     comptime GL_MAP_PERSISTENT_BIT_EXT = BufferStorageMask(0x0040)
     comptime GL_MAP_COHERENT_BIT = BufferStorageMask(0x0080)
     comptime GL_MAP_COHERENT_BIT_EXT = BufferStorageMask(0x0080)
+    comptime GL_MAP_CLIENT_POINTER_BIT_MESA = BufferStorageMask(0x4000)
 
     @always_inline
     def __int__(self) -> Int:
@@ -502,6 +509,15 @@ struct BufferUsageARB(Intable, TrivialRegisterPassable):
     comptime GL_DYNAMIC_DRAW = BufferUsageARB(0x88E8)
     comptime GL_DYNAMIC_READ = BufferUsageARB(0x88E9)
     comptime GL_DYNAMIC_COPY = BufferUsageARB(0x88EA)
+    comptime GL_CLIENT_POINTER_STREAM_DRAW_MESA = BufferUsageARB(0x9791)
+    comptime GL_CLIENT_POINTER_STREAM_READ_MESA = BufferUsageARB(0x9792)
+    comptime GL_CLIENT_POINTER_STREAM_COPY_MESA = BufferUsageARB(0x9793)
+    comptime GL_CLIENT_POINTER_STATIC_DRAW_MESA = BufferUsageARB(0x9794)
+    comptime GL_CLIENT_POINTER_STATIC_READ_MESA = BufferUsageARB(0x9795)
+    comptime GL_CLIENT_POINTER_STATIC_COPY_MESA = BufferUsageARB(0x9796)
+    comptime GL_CLIENT_POINTER_DYNAMIC_DRAW_MESA = BufferUsageARB(0x9797)
+    comptime GL_CLIENT_POINTER_DYNAMIC_READ_MESA = BufferUsageARB(0x9798)
+    comptime GL_CLIENT_POINTER_DYNAMIC_COPY_MESA = BufferUsageARB(0x9799)
 
     @always_inline
     def __int__(self) -> Int:
@@ -5147,13 +5163,13 @@ comptime func_table = _Global["table", _init_empty_table]()
 @always_inline
 def load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
     var func = load(name)
-    return UnsafePointer(to=func).bitcast[FuncPtr]()[]
+    return Ptr(to=func).unsafe_bitcast[FuncPtr]()[]
 
 
 @always_inline
 def get_fn[fn_type: ImplicitlyCopyable, name: StaticString]() raises -> fn_type:
     var ptr = func_table.get_or_create_ptr()[][name]
-    return UnsafePointer(to=ptr).bitcast[fn_type]()[]
+    return Ptr(to=ptr).unsafe_bitcast[fn_type]()[]
 
 
 comptime glActiveShaderProgram = def(pipeline: GLuint, program: GLuint) thin abi("C")
@@ -5343,14 +5359,14 @@ comptime glGenVertexArrays = def(n: GLsizei, arrays: Ptr[GLuint, MutAnyOrigin]) 
 comptime glGenerateMipmap = def(target: TextureTarget) thin abi("C")
 comptime glGenerateTextureMipmap = def(texture: GLuint) thin abi("C")
 comptime glGetActiveAtomicCounterBufferiv = def(program: GLuint, buffer_index: GLuint, pname: AtomicCounterBufferPName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetActiveAttrib = def(program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], size: Ptr[GLint, MutAnyOrigin], type: Ptr[AttributeType, MutAnyOrigin], name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
-comptime glGetActiveSubroutineName = def(program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
-comptime glGetActiveSubroutineUniformName = def(program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetActiveAttrib = def(program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], size: Ptr[GLint, MutAnyOrigin], type: Ptr[AttributeType, MutAnyOrigin], name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
+comptime glGetActiveSubroutineName = def(program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
+comptime glGetActiveSubroutineUniformName = def(program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetActiveSubroutineUniformiv = def(program: GLuint, shadertype: ShaderType, index: GLuint, pname: SubroutineParameterName, values: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetActiveUniform = def(program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], size: Ptr[GLint, MutAnyOrigin], type: Ptr[UniformType, MutAnyOrigin], name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
-comptime glGetActiveUniformBlockName = def(program: GLuint, uniform_block_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], uniform_block_name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetActiveUniform = def(program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], size: Ptr[GLint, MutAnyOrigin], type: Ptr[UniformType, MutAnyOrigin], name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
+comptime glGetActiveUniformBlockName = def(program: GLuint, uniform_block_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], uniform_block_name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetActiveUniformBlockiv = def(program: GLuint, uniform_block_index: GLuint, pname: UniformBlockPName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetActiveUniformName = def(program: GLuint, uniform_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], uniform_name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetActiveUniformName = def(program: GLuint, uniform_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], uniform_name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetActiveUniformsiv = def(program: GLuint, uniform_count: GLsizei, uniform_indices: Ptr[GLuint, ImmutAnyOrigin], pname: UniformPName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetAttachedShaders = def(program: GLuint, max_count: GLsizei, count: Ptr[GLsizei, MutAnyOrigin], shaders: Ptr[GLuint, MutAnyOrigin]) thin abi("C")
 comptime glGetAttribLocation = def(program: GLuint, name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLint
@@ -5363,7 +5379,7 @@ comptime glGetBufferSubData = def(target: BufferTargetARB, offset: GLintptr, siz
 comptime glGetCompressedTexImage = def(target: TextureTarget, level: GLint, img: Optional[Ptr[NoneType, MutAnyOrigin]]) thin abi("C")
 comptime glGetCompressedTextureImage = def(texture: GLuint, level: GLint, buf_size: GLsizei, pixels: Optional[Ptr[NoneType, MutAnyOrigin]]) thin abi("C")
 comptime glGetCompressedTextureSubImage = def(texture: GLuint, level: GLint, xoffset: GLint, yoffset: GLint, zoffset: GLint, width: GLsizei, height: GLsizei, depth: GLsizei, buf_size: GLsizei, pixels: Optional[Ptr[NoneType, MutAnyOrigin]]) thin abi("C")
-comptime glGetDebugMessageLog = def(count: GLuint, buf_size: GLsizei, sources: Ptr[DebugSource, MutAnyOrigin], types: Ptr[DebugType, MutAnyOrigin], ids: Ptr[GLuint, MutAnyOrigin], severities: Ptr[DebugSeverity, MutAnyOrigin], lengths: Ptr[GLsizei, MutAnyOrigin], message_log: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLuint
+comptime glGetDebugMessageLog = def(count: GLuint, buf_size: GLsizei, sources: Ptr[DebugSource, MutAnyOrigin], types: Ptr[DebugType, MutAnyOrigin], ids: Ptr[GLuint, MutAnyOrigin], severities: Ptr[DebugSeverity, MutAnyOrigin], lengths: Ptr[GLsizei, MutAnyOrigin], message_log: Ptr[GLchar, MutAnyOrigin]) thin abi("C") -> GLuint
 comptime glGetDoublei_v = def(target: GetPName, index: GLuint, data: Ptr[GLdouble, MutAnyOrigin]) thin abi("C")
 comptime glGetDoublev = def(pname: GetPName, data: Ptr[GLdouble, MutAnyOrigin]) thin abi("C")
 comptime glGetError = def() thin abi("C") -> ErrorCode
@@ -5388,17 +5404,17 @@ comptime glGetNamedBufferSubData = def(buffer: GLuint, offset: GLintptr, size: G
 comptime glGetNamedFramebufferAttachmentParameteriv = def(framebuffer: GLuint, attachment: FramebufferAttachment, pname: FramebufferAttachmentParameterName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetNamedFramebufferParameteriv = def(framebuffer: GLuint, pname: GetFramebufferParameter, param: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetNamedRenderbufferParameteriv = def(renderbuffer: GLuint, pname: RenderbufferParameterName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetObjectLabel = def(identifier: ObjectIdentifier, name: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], label: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
-comptime glGetObjectPtrLabel = def(ptr: Optional[Ptr[NoneType, ImmutAnyOrigin]], buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], label: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetObjectLabel = def(identifier: ObjectIdentifier, name: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], label: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
+comptime glGetObjectPtrLabel = def(ptr: Optional[Ptr[NoneType, ImmutAnyOrigin]], buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], label: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramBinary = def(program: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], binary_format: Ptr[GLenum, MutAnyOrigin], binary: Optional[Ptr[NoneType, MutAnyOrigin]]) thin abi("C")
-comptime glGetProgramInfoLog = def(program: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], info_log: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetProgramInfoLog = def(program: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], info_log: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramInterfaceiv = def(program: GLuint, program_interface: ProgramInterface, pname: ProgramInterfacePName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetProgramPipelineInfoLog = def(pipeline: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], info_log: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetProgramPipelineInfoLog = def(pipeline: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], info_log: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramPipelineiv = def(pipeline: GLuint, pname: PipelineParameterName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramResourceIndex = def(program: GLuint, program_interface: ProgramInterface, name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLuint
 comptime glGetProgramResourceLocation = def(program: GLuint, program_interface: ProgramInterface, name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLint
 comptime glGetProgramResourceLocationIndex = def(program: GLuint, program_interface: ProgramInterface, name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLint
-comptime glGetProgramResourceName = def(program: GLuint, program_interface: ProgramInterface, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetProgramResourceName = def(program: GLuint, program_interface: ProgramInterface, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramResourceiv = def(program: GLuint, program_interface: ProgramInterface, index: GLuint, prop_count: GLsizei, props: Ptr[ProgramResourceProperty, ImmutAnyOrigin], count: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramStageiv = def(program: GLuint, shadertype: ShaderType, pname: ProgramStagePName, values: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetProgramiv = def(program: GLuint, pname: ProgramPropertyARB, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
@@ -5417,12 +5433,12 @@ comptime glGetSamplerParameterIiv = def(sampler: GLuint, pname: SamplerParameter
 comptime glGetSamplerParameterIuiv = def(sampler: GLuint, pname: SamplerParameterI, params: Ptr[GLuint, MutAnyOrigin]) thin abi("C")
 comptime glGetSamplerParameterfv = def(sampler: GLuint, pname: SamplerParameterF, params: Ptr[GLfloat, MutAnyOrigin]) thin abi("C")
 comptime glGetSamplerParameteriv = def(sampler: GLuint, pname: SamplerParameterI, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetShaderInfoLog = def(shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], info_log: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetShaderInfoLog = def(shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], info_log: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetShaderPrecisionFormat = def(shadertype: ShaderType, precisiontype: PrecisionType, range: Ptr[GLint, MutAnyOrigin], precision: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetShaderSource = def(shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], source: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetShaderSource = def(shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], source: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetShaderiv = def(shader: GLuint, pname: ShaderParameterName, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
-comptime glGetString = def(name: StringName) thin abi("C") -> GLubyte
-comptime glGetStringi = def(name: StringName, index: GLuint) thin abi("C") -> GLubyte
+comptime glGetString = def(name: StringName) thin abi("C") -> Optional[Ptr[GLubyte, ImmUntrackedOrigin]]
+comptime glGetStringi = def(name: StringName, index: GLuint) thin abi("C") -> Optional[Ptr[GLubyte, ImmUntrackedOrigin]]
 comptime glGetSubroutineIndex = def(program: GLuint, shadertype: ShaderType, name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLuint
 comptime glGetSubroutineUniformLocation = def(program: GLuint, shadertype: ShaderType, name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C") -> GLint
 comptime glGetSynciv = def(sync: GLsync, pname: SyncParameterName, count: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], values: Ptr[GLint, MutAnyOrigin]) thin abi("C")
@@ -5441,7 +5457,7 @@ comptime glGetTextureParameterIuiv = def(texture: GLuint, pname: GetTextureParam
 comptime glGetTextureParameterfv = def(texture: GLuint, pname: GetTextureParameter, params: Ptr[GLfloat, MutAnyOrigin]) thin abi("C")
 comptime glGetTextureParameteriv = def(texture: GLuint, pname: GetTextureParameter, params: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetTextureSubImage = def(texture: GLuint, level: GLint, xoffset: GLint, yoffset: GLint, zoffset: GLint, width: GLsizei, height: GLsizei, depth: GLsizei, format: PixelFormat, type: PixelType, buf_size: GLsizei, pixels: Optional[Ptr[NoneType, MutAnyOrigin]]) thin abi("C")
-comptime glGetTransformFeedbackVarying = def(program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], size: Ptr[GLsizei, MutAnyOrigin], type: Ptr[AttributeType, MutAnyOrigin], name: Ptr[GLchar, ImmutAnyOrigin]) thin abi("C")
+comptime glGetTransformFeedbackVarying = def(program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, MutAnyOrigin], size: Ptr[GLsizei, MutAnyOrigin], type: Ptr[AttributeType, MutAnyOrigin], name: Ptr[GLchar, MutAnyOrigin]) thin abi("C")
 comptime glGetTransformFeedbacki64_v = def(xfb: GLuint, pname: TransformFeedbackPName, index: GLuint, param: Ptr[GLint64, MutAnyOrigin]) thin abi("C")
 comptime glGetTransformFeedbacki_v = def(xfb: GLuint, pname: TransformFeedbackPName, index: GLuint, param: Ptr[GLint, MutAnyOrigin]) thin abi("C")
 comptime glGetTransformFeedbackiv = def(xfb: GLuint, pname: TransformFeedbackPName, param: Ptr[GLint, MutAnyOrigin]) thin abi("C")
@@ -5507,10 +5523,10 @@ comptime glIsVertexArray = def(array: GLuint) thin abi("C") -> GLboolean
 comptime glLineWidth = def(width: GLfloat) thin abi("C")
 comptime glLinkProgram = def(program: GLuint) thin abi("C")
 comptime glLogicOp = def(opcode: LogicOp) thin abi("C")
-comptime glMapBuffer = def(target: BufferTargetARB, access: BufferAccessARB) thin abi("C")
-comptime glMapBufferRange = def(target: BufferTargetARB, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) thin abi("C")
-comptime glMapNamedBuffer = def(buffer: GLuint, access: BufferAccessARB) thin abi("C")
-comptime glMapNamedBufferRange = def(buffer: GLuint, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) thin abi("C")
+comptime glMapBuffer = def(target: BufferTargetARB, access: BufferAccessARB) thin abi("C") -> Optional[Ptr[NoneType, MutUntrackedOrigin]]
+comptime glMapBufferRange = def(target: BufferTargetARB, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) thin abi("C") -> Optional[Ptr[NoneType, MutUntrackedOrigin]]
+comptime glMapNamedBuffer = def(buffer: GLuint, access: BufferAccessARB) thin abi("C") -> Optional[Ptr[NoneType, MutUntrackedOrigin]]
+comptime glMapNamedBufferRange = def(buffer: GLuint, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) thin abi("C") -> Optional[Ptr[NoneType, MutUntrackedOrigin]]
 comptime glMemoryBarrier = def(barriers: MemoryBarrierMask) thin abi("C")
 comptime glMemoryBarrierByRegion = def(barriers: MemoryBarrierMask) thin abi("C")
 comptime glMinSampleShading = def(value: GLfloat) thin abi("C")
@@ -5885,7 +5901,7 @@ def begin_transform_feedback(primitive_mode: PrimitiveType) raises:
 
 
 def bind_attrib_location(program: GLuint, index: GLuint, var name: String) raises:
-    return get_fn[glBindAttribLocation, "glBindAttribLocation"]()(program, index, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glBindAttribLocation, "glBindAttribLocation"]()(program, index, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def bind_buffer(target: BufferTargetARB, buffer: GLuint) raises:
@@ -5909,11 +5925,11 @@ def bind_buffers_range[O_buffers: Origin, O_offsets: Origin, O_sizes: Origin, //
 
 
 def bind_frag_data_location(program: GLuint, color: GLuint, var name: String) raises:
-    return get_fn[glBindFragDataLocation, "glBindFragDataLocation"]()(program, color, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glBindFragDataLocation, "glBindFragDataLocation"]()(program, color, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def bind_frag_data_location_indexed(program: GLuint, color_number: GLuint, index: GLuint, var name: String) raises:
-    return get_fn[glBindFragDataLocationIndexed, "glBindFragDataLocationIndexed"]()(program, color_number, index, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glBindFragDataLocationIndexed, "glBindFragDataLocationIndexed"]()(program, color_number, index, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def bind_framebuffer(target: FramebufferTarget, framebuffer: GLuint) raises:
@@ -6319,8 +6335,8 @@ def create_shader(type: ShaderType) raises -> GLuint:
 
 
 def create_shader_programv(type: ShaderType, count: GLsizei, var strings: List[String]) raises -> GLuint:
-    var c_list = [UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().unsafe_ptr())) for ref str in strings]
-    return get_fn[glCreateShaderProgramv, "glCreateShaderProgramv"]()(type, count, UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())))
+    var c_list = [Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().ptr())) for ref str in strings]
+    return get_fn[glCreateShaderProgramv, "glCreateShaderProgramv"]()(type, count, Ptr[mut=False, Ptr[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())))
 
 
 def create_textures[O_textures: Origin, //](target: TextureTarget, n: GLsizei, textures: Ptr[GLuint, O_textures]) raises:
@@ -6351,7 +6367,7 @@ def debug_message_control[O_ids: Origin, //](source: DebugSource, type: DebugTyp
 
 
 def debug_message_insert(source: DebugSource, type: DebugType, id: GLuint, severity: DebugSeverity, length: GLsizei, var buf: String) raises:
-    return get_fn[glDebugMessageInsert, "glDebugMessageInsert"]()(source, type, id, severity, length, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(buf.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glDebugMessageInsert, "glDebugMessageInsert"]()(source, type, id, severity, length, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(buf.as_c_string_slice().ptr())))
 
 
 def delete_buffers[O_buffers: Origin, //](n: GLsizei, buffers: Ptr[GLuint, O_buffers]) raises:
@@ -6692,36 +6708,36 @@ def get_active_atomic_counter_bufferiv[O_params: Origin, //](program: GLuint, bu
     return get_fn[glGetActiveAtomicCounterBufferiv, "glGetActiveAtomicCounterBufferiv"]()(program, buffer_index, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(params)))
 
 
-def get_active_attrib[O_length: Origin, O_size: Origin, O_type: Origin, //](program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], size: Ptr[GLint, O_size], type: Ptr[AttributeType, O_type], var name: String) raises:
-    return get_fn[glGetActiveAttrib, "glGetActiveAttrib"]()(program, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(size)), Ptr[AttributeType, MutAnyOrigin](unsafe_from_address=Int(type)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+def get_active_attrib[O_length: Origin, O_size: Origin, O_type: Origin, O_name: Origin, //](program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], size: Ptr[GLint, O_size], type: Ptr[AttributeType, O_type], name: Ptr[GLchar, O_name]) raises:
+    return get_fn[glGetActiveAttrib, "glGetActiveAttrib"]()(program, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(size)), Ptr[AttributeType, MutAnyOrigin](unsafe_from_address=Int(type)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(name)))
 
 
-def get_active_subroutine_name[O_length: Origin, //](program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var name: String) raises:
-    return get_fn[glGetActiveSubroutineName, "glGetActiveSubroutineName"]()(program, shadertype, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+def get_active_subroutine_name[O_length: Origin, O_name: Origin, //](program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], name: Ptr[GLchar, O_name]) raises:
+    return get_fn[glGetActiveSubroutineName, "glGetActiveSubroutineName"]()(program, shadertype, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(name)))
 
 
-def get_active_subroutine_uniform_name[O_length: Origin, //](program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var name: String) raises:
-    return get_fn[glGetActiveSubroutineUniformName, "glGetActiveSubroutineUniformName"]()(program, shadertype, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+def get_active_subroutine_uniform_name[O_length: Origin, O_name: Origin, //](program: GLuint, shadertype: ShaderType, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], name: Ptr[GLchar, O_name]) raises:
+    return get_fn[glGetActiveSubroutineUniformName, "glGetActiveSubroutineUniformName"]()(program, shadertype, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(name)))
 
 
 def get_active_subroutine_uniformiv[O_values: Origin, //](program: GLuint, shadertype: ShaderType, index: GLuint, pname: SubroutineParameterName, values: Ptr[GLint, O_values]) raises:
     return get_fn[glGetActiveSubroutineUniformiv, "glGetActiveSubroutineUniformiv"]()(program, shadertype, index, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(values)))
 
 
-def get_active_uniform[O_length: Origin, O_size: Origin, O_type: Origin, //](program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], size: Ptr[GLint, O_size], type: Ptr[UniformType, O_type], var name: String) raises:
-    return get_fn[glGetActiveUniform, "glGetActiveUniform"]()(program, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(size)), Ptr[UniformType, MutAnyOrigin](unsafe_from_address=Int(type)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+def get_active_uniform[O_length: Origin, O_size: Origin, O_type: Origin, O_name: Origin, //](program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], size: Ptr[GLint, O_size], type: Ptr[UniformType, O_type], name: Ptr[GLchar, O_name]) raises:
+    return get_fn[glGetActiveUniform, "glGetActiveUniform"]()(program, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(size)), Ptr[UniformType, MutAnyOrigin](unsafe_from_address=Int(type)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(name)))
 
 
-def get_active_uniform_block_name[O_length: Origin, //](program: GLuint, uniform_block_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var uniform_block_name: String) raises:
-    return get_fn[glGetActiveUniformBlockName, "glGetActiveUniformBlockName"]()(program, uniform_block_index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(uniform_block_name.as_c_string_slice().unsafe_ptr())))
+def get_active_uniform_block_name[O_length: Origin, O_uniform_block_name: Origin, //](program: GLuint, uniform_block_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], uniform_block_name: Ptr[GLchar, O_uniform_block_name]) raises:
+    return get_fn[glGetActiveUniformBlockName, "glGetActiveUniformBlockName"]()(program, uniform_block_index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(uniform_block_name)))
 
 
 def get_active_uniform_blockiv[O_params: Origin, //](program: GLuint, uniform_block_index: GLuint, pname: UniformBlockPName, params: Ptr[GLint, O_params]) raises:
     return get_fn[glGetActiveUniformBlockiv, "glGetActiveUniformBlockiv"]()(program, uniform_block_index, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(params)))
 
 
-def get_active_uniform_name[O_length: Origin, //](program: GLuint, uniform_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var uniform_name: String) raises:
-    return get_fn[glGetActiveUniformName, "glGetActiveUniformName"]()(program, uniform_index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(uniform_name.as_c_string_slice().unsafe_ptr())))
+def get_active_uniform_name[O_length: Origin, O_uniform_name: Origin, //](program: GLuint, uniform_index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], uniform_name: Ptr[GLchar, O_uniform_name]) raises:
+    return get_fn[glGetActiveUniformName, "glGetActiveUniformName"]()(program, uniform_index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(uniform_name)))
 
 
 def get_active_uniformsiv[O_uniform_indices: Origin, O_params: Origin, //](program: GLuint, uniform_count: GLsizei, uniform_indices: Ptr[GLuint, O_uniform_indices], pname: UniformPName, params: Ptr[GLint, O_params]) raises:
@@ -6733,7 +6749,7 @@ def get_attached_shaders[O_count: Origin, O_shaders: Origin, //](program: GLuint
 
 
 def get_attrib_location(program: GLuint, var name: String) raises -> GLint:
-    return get_fn[glGetAttribLocation, "glGetAttribLocation"]()(program, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetAttribLocation, "glGetAttribLocation"]()(program, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_booleani_v[O_data: Origin, //](target: BufferTargetARB, index: GLuint, data: Ptr[GLboolean, O_data]) raises:
@@ -6784,8 +6800,8 @@ def get_compressed_texture_sub_image[O_pixels: Origin, //](texture: GLuint, leve
     return get_fn[glGetCompressedTextureSubImage, "glGetCompressedTextureSubImage"]()(texture, level, xoffset, yoffset, zoffset, width, height, depth, buf_size, ffi_pixels)
 
 
-def get_debug_message_log[O_sources: Origin, O_types: Origin, O_ids: Origin, O_severities: Origin, O_lengths: Origin, //](count: GLuint, buf_size: GLsizei, sources: Ptr[DebugSource, O_sources], types: Ptr[DebugType, O_types], ids: Ptr[GLuint, O_ids], severities: Ptr[DebugSeverity, O_severities], lengths: Ptr[GLsizei, O_lengths], var message_log: String) raises -> GLuint:
-    return get_fn[glGetDebugMessageLog, "glGetDebugMessageLog"]()(count, buf_size, Ptr[DebugSource, MutAnyOrigin](unsafe_from_address=Int(sources)), Ptr[DebugType, MutAnyOrigin](unsafe_from_address=Int(types)), Ptr[GLuint, MutAnyOrigin](unsafe_from_address=Int(ids)), Ptr[DebugSeverity, MutAnyOrigin](unsafe_from_address=Int(severities)), Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(lengths)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(message_log.as_c_string_slice().unsafe_ptr())))
+def get_debug_message_log[O_sources: Origin, O_types: Origin, O_ids: Origin, O_severities: Origin, O_lengths: Origin, O_message_log: Origin, //](count: GLuint, buf_size: GLsizei, sources: Ptr[DebugSource, O_sources], types: Ptr[DebugType, O_types], ids: Ptr[GLuint, O_ids], severities: Ptr[DebugSeverity, O_severities], lengths: Ptr[GLsizei, O_lengths], message_log: Ptr[GLchar, O_message_log]) raises -> GLuint:
+    return get_fn[glGetDebugMessageLog, "glGetDebugMessageLog"]()(count, buf_size, Ptr[DebugSource, MutAnyOrigin](unsafe_from_address=Int(sources)), Ptr[DebugType, MutAnyOrigin](unsafe_from_address=Int(types)), Ptr[GLuint, MutAnyOrigin](unsafe_from_address=Int(ids)), Ptr[DebugSeverity, MutAnyOrigin](unsafe_from_address=Int(severities)), Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(lengths)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(message_log)))
 
 
 def get_doublei_v[O_data: Origin, //](target: GetPName, index: GLuint, data: Ptr[GLdouble, O_data]) raises:
@@ -6809,11 +6825,11 @@ def get_floatv[O_data: Origin, //](pname: GetPName, data: Ptr[GLfloat, O_data]) 
 
 
 def get_frag_data_index(program: GLuint, var name: String) raises -> GLint:
-    return get_fn[glGetFragDataIndex, "glGetFragDataIndex"]()(program, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetFragDataIndex, "glGetFragDataIndex"]()(program, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_frag_data_location(program: GLuint, var name: String) raises -> GLint:
-    return get_fn[glGetFragDataLocation, "glGetFragDataLocation"]()(program, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetFragDataLocation, "glGetFragDataLocation"]()(program, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_framebuffer_attachment_parameteriv[O_params: Origin, //](target: FramebufferTarget, attachment: FramebufferAttachment, pname: FramebufferAttachmentParameterName, params: Ptr[GLint, O_params]) raises:
@@ -6887,15 +6903,15 @@ def get_named_renderbuffer_parameteriv[O_params: Origin, //](renderbuffer: GLuin
     return get_fn[glGetNamedRenderbufferParameteriv, "glGetNamedRenderbufferParameteriv"]()(renderbuffer, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(params)))
 
 
-def get_object_label[O_length: Origin, //](identifier: ObjectIdentifier, name: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var label: String) raises:
-    return get_fn[glGetObjectLabel, "glGetObjectLabel"]()(identifier, name, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(label.as_c_string_slice().unsafe_ptr())))
+def get_object_label[O_length: Origin, O_label: Origin, //](identifier: ObjectIdentifier, name: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], label: Ptr[GLchar, O_label]) raises:
+    return get_fn[glGetObjectLabel, "glGetObjectLabel"]()(identifier, name, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(label)))
 
 
-def get_object_ptr_label[O_ptr: Origin, O_length: Origin, //](ptr: Optional[Ptr[NoneType, O_ptr]], buf_size: GLsizei, length: Ptr[GLsizei, O_length], var label: String) raises:
+def get_object_ptr_label[O_ptr: Origin, O_length: Origin, O_label: Origin, //](ptr: Optional[Ptr[NoneType, O_ptr]], buf_size: GLsizei, length: Ptr[GLsizei, O_length], label: Ptr[GLchar, O_label]) raises:
     var ffi_ptr: Optional[Ptr[NoneType, ImmutAnyOrigin]] = None
     if ptr:
         ffi_ptr = Ptr[NoneType, ImmutAnyOrigin](unsafe_from_address=Int(ptr.value()))
-    return get_fn[glGetObjectPtrLabel, "glGetObjectPtrLabel"]()(ffi_ptr, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(label.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetObjectPtrLabel, "glGetObjectPtrLabel"]()(ffi_ptr, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(label)))
 
 
 def get_program_binary[O_length: Origin, O_binary_format: Origin, O_binary: Origin, //](program: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], binary_format: Ptr[GLenum, O_binary_format], binary: Optional[Ptr[NoneType, O_binary]]) raises:
@@ -6905,16 +6921,16 @@ def get_program_binary[O_length: Origin, O_binary_format: Origin, O_binary: Orig
     return get_fn[glGetProgramBinary, "glGetProgramBinary"]()(program, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLenum, MutAnyOrigin](unsafe_from_address=Int(binary_format)), ffi_binary)
 
 
-def get_program_info_log[O_length: Origin, //](program: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var info_log: String) raises:
-    return get_fn[glGetProgramInfoLog, "glGetProgramInfoLog"]()(program, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(info_log.as_c_string_slice().unsafe_ptr())))
+def get_program_info_log[O_length: Origin, O_info_log: Origin, //](program: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], info_log: Ptr[GLchar, O_info_log]) raises:
+    return get_fn[glGetProgramInfoLog, "glGetProgramInfoLog"]()(program, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(info_log)))
 
 
 def get_program_interfaceiv[O_params: Origin, //](program: GLuint, program_interface: ProgramInterface, pname: ProgramInterfacePName, params: Ptr[GLint, O_params]) raises:
     return get_fn[glGetProgramInterfaceiv, "glGetProgramInterfaceiv"]()(program, program_interface, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(params)))
 
 
-def get_program_pipeline_info_log[O_length: Origin, //](pipeline: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var info_log: String) raises:
-    return get_fn[glGetProgramPipelineInfoLog, "glGetProgramPipelineInfoLog"]()(pipeline, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(info_log.as_c_string_slice().unsafe_ptr())))
+def get_program_pipeline_info_log[O_length: Origin, O_info_log: Origin, //](pipeline: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], info_log: Ptr[GLchar, O_info_log]) raises:
+    return get_fn[glGetProgramPipelineInfoLog, "glGetProgramPipelineInfoLog"]()(pipeline, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(info_log)))
 
 
 def get_program_pipelineiv[O_params: Origin, //](pipeline: GLuint, pname: PipelineParameterName, params: Ptr[GLint, O_params]) raises:
@@ -6922,19 +6938,19 @@ def get_program_pipelineiv[O_params: Origin, //](pipeline: GLuint, pname: Pipeli
 
 
 def get_program_resource_index(program: GLuint, program_interface: ProgramInterface, var name: String) raises -> GLuint:
-    return get_fn[glGetProgramResourceIndex, "glGetProgramResourceIndex"]()(program, program_interface, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetProgramResourceIndex, "glGetProgramResourceIndex"]()(program, program_interface, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_program_resource_location(program: GLuint, program_interface: ProgramInterface, var name: String) raises -> GLint:
-    return get_fn[glGetProgramResourceLocation, "glGetProgramResourceLocation"]()(program, program_interface, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetProgramResourceLocation, "glGetProgramResourceLocation"]()(program, program_interface, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_program_resource_location_index(program: GLuint, program_interface: ProgramInterface, var name: String) raises -> GLint:
-    return get_fn[glGetProgramResourceLocationIndex, "glGetProgramResourceLocationIndex"]()(program, program_interface, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetProgramResourceLocationIndex, "glGetProgramResourceLocationIndex"]()(program, program_interface, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
-def get_program_resource_name[O_length: Origin, //](program: GLuint, program_interface: ProgramInterface, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var name: String) raises:
-    return get_fn[glGetProgramResourceName, "glGetProgramResourceName"]()(program, program_interface, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+def get_program_resource_name[O_length: Origin, O_name: Origin, //](program: GLuint, program_interface: ProgramInterface, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], name: Ptr[GLchar, O_name]) raises:
+    return get_fn[glGetProgramResourceName, "glGetProgramResourceName"]()(program, program_interface, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(name)))
 
 
 def get_program_resourceiv[O_props: Origin, O_length: Origin, O_params: Origin, //](program: GLuint, program_interface: ProgramInterface, index: GLuint, prop_count: GLsizei, props: Ptr[ProgramResourceProperty, O_props], count: GLsizei, length: Ptr[GLsizei, O_length], params: Ptr[GLint, O_params]) raises:
@@ -7009,36 +7025,42 @@ def get_sampler_parameteriv[O_params: Origin, //](sampler: GLuint, pname: Sample
     return get_fn[glGetSamplerParameteriv, "glGetSamplerParameteriv"]()(sampler, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(params)))
 
 
-def get_shader_info_log[O_length: Origin, //](shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var info_log: String) raises:
-    return get_fn[glGetShaderInfoLog, "glGetShaderInfoLog"]()(shader, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(info_log.as_c_string_slice().unsafe_ptr())))
+def get_shader_info_log[O_length: Origin, O_info_log: Origin, //](shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], info_log: Ptr[GLchar, O_info_log]) raises:
+    return get_fn[glGetShaderInfoLog, "glGetShaderInfoLog"]()(shader, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(info_log)))
 
 
 def get_shader_precision_format[O_range: Origin, O_precision: Origin, //](shadertype: ShaderType, precisiontype: PrecisionType, range: Ptr[GLint, O_range], precision: Ptr[GLint, O_precision]) raises:
     return get_fn[glGetShaderPrecisionFormat, "glGetShaderPrecisionFormat"]()(shadertype, precisiontype, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(range)), Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(precision)))
 
 
-def get_shader_source[O_length: Origin, //](shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], var source: String) raises:
-    return get_fn[glGetShaderSource, "glGetShaderSource"]()(shader, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(source.as_c_string_slice().unsafe_ptr())))
+def get_shader_source[O_length: Origin, O_source: Origin, //](shader: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], source: Ptr[GLchar, O_source]) raises:
+    return get_fn[glGetShaderSource, "glGetShaderSource"]()(shader, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(source)))
 
 
 def get_shaderiv[O_params: Origin, //](shader: GLuint, pname: ShaderParameterName, params: Ptr[GLint, O_params]) raises:
     return get_fn[glGetShaderiv, "glGetShaderiv"]()(shader, pname, Ptr[GLint, MutAnyOrigin](unsafe_from_address=Int(params)))
 
 
-def get_string(name: StringName) raises -> GLubyte:
-    return get_fn[glGetString, "glGetString"]()(name)
+def get_string(name: StringName) raises -> String:
+    var result = get_fn[glGetString, "glGetString"]()(name)
+    if not result:
+        raise Error("glGetString returned null")
+    return gl_string(result.value())
 
 
-def get_stringi(name: StringName, index: GLuint) raises -> GLubyte:
-    return get_fn[glGetStringi, "glGetStringi"]()(name, index)
+def get_stringi(name: StringName, index: GLuint) raises -> String:
+    var result = get_fn[glGetStringi, "glGetStringi"]()(name, index)
+    if not result:
+        raise Error("glGetStringi returned null")
+    return gl_string(result.value())
 
 
 def get_subroutine_index(program: GLuint, shadertype: ShaderType, var name: String) raises -> GLuint:
-    return get_fn[glGetSubroutineIndex, "glGetSubroutineIndex"]()(program, shadertype, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetSubroutineIndex, "glGetSubroutineIndex"]()(program, shadertype, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_subroutine_uniform_location(program: GLuint, shadertype: ShaderType, var name: String) raises -> GLint:
-    return get_fn[glGetSubroutineUniformLocation, "glGetSubroutineUniformLocation"]()(program, shadertype, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetSubroutineUniformLocation, "glGetSubroutineUniformLocation"]()(program, shadertype, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_synciv[O_length: Origin, O_values: Origin, //](sync: GLsync, pname: SyncParameterName, count: GLsizei, length: Ptr[GLsizei, O_length], values: Ptr[GLint, O_values]) raises:
@@ -7114,8 +7136,8 @@ def get_texture_sub_image[O_pixels: Origin, //](texture: GLuint, level: GLint, x
     return get_fn[glGetTextureSubImage, "glGetTextureSubImage"]()(texture, level, xoffset, yoffset, zoffset, width, height, depth, format, type, buf_size, ffi_pixels)
 
 
-def get_transform_feedback_varying[O_length: Origin, O_size: Origin, O_type: Origin, //](program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], size: Ptr[GLsizei, O_size], type: Ptr[AttributeType, O_type], var name: String) raises:
-    return get_fn[glGetTransformFeedbackVarying, "glGetTransformFeedbackVarying"]()(program, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(size)), Ptr[AttributeType, MutAnyOrigin](unsafe_from_address=Int(type)), UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+def get_transform_feedback_varying[O_length: Origin, O_size: Origin, O_type: Origin, O_name: Origin, //](program: GLuint, index: GLuint, buf_size: GLsizei, length: Ptr[GLsizei, O_length], size: Ptr[GLsizei, O_size], type: Ptr[AttributeType, O_type], name: Ptr[GLchar, O_name]) raises:
+    return get_fn[glGetTransformFeedbackVarying, "glGetTransformFeedbackVarying"]()(program, index, buf_size, Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(length)), Ptr[GLsizei, MutAnyOrigin](unsafe_from_address=Int(size)), Ptr[AttributeType, MutAnyOrigin](unsafe_from_address=Int(type)), Ptr[GLchar, MutAnyOrigin](unsafe_from_address=Int(name)))
 
 
 def get_transform_feedbacki64_v[O_param: Origin, //](xfb: GLuint, pname: TransformFeedbackPName, index: GLuint, param: Ptr[GLint64, O_param]) raises:
@@ -7131,16 +7153,16 @@ def get_transform_feedbackiv[O_param: Origin, //](xfb: GLuint, pname: TransformF
 
 
 def get_uniform_block_index(program: GLuint, var uniform_block_name: String) raises -> GLuint:
-    return get_fn[glGetUniformBlockIndex, "glGetUniformBlockIndex"]()(program, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(uniform_block_name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetUniformBlockIndex, "glGetUniformBlockIndex"]()(program, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(uniform_block_name.as_c_string_slice().ptr())))
 
 
 def get_uniform_indices[O_uniform_indices: Origin, //](program: GLuint, uniform_count: GLsizei, var uniform_names: List[String], uniform_indices: Ptr[GLuint, O_uniform_indices]) raises:
-    var c_list = [UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().unsafe_ptr())) for ref str in uniform_names]
-    return get_fn[glGetUniformIndices, "glGetUniformIndices"]()(program, uniform_count, UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())), Ptr[GLuint, MutAnyOrigin](unsafe_from_address=Int(uniform_indices)))
+    var c_list = [Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().ptr())) for ref str in uniform_names]
+    return get_fn[glGetUniformIndices, "glGetUniformIndices"]()(program, uniform_count, Ptr[mut=False, Ptr[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())), Ptr[GLuint, MutAnyOrigin](unsafe_from_address=Int(uniform_indices)))
 
 
 def get_uniform_location(program: GLuint, var name: String) raises -> GLint:
-    return get_fn[glGetUniformLocation, "glGetUniformLocation"]()(program, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glGetUniformLocation, "glGetUniformLocation"]()(program, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(name.as_c_string_slice().ptr())))
 
 
 def get_uniform_subroutineuiv[O_params: Origin, //](shadertype: ShaderType, location: GLint, params: Ptr[GLuint, O_params]) raises:
@@ -7406,19 +7428,19 @@ def logic_op(opcode: LogicOp) raises:
     return get_fn[glLogicOp, "glLogicOp"]()(opcode)
 
 
-def map_buffer(target: BufferTargetARB, access: BufferAccessARB) raises:
+def map_buffer(target: BufferTargetARB, access: BufferAccessARB) raises -> Optional[Ptr[NoneType, MutUntrackedOrigin]]:
     return get_fn[glMapBuffer, "glMapBuffer"]()(target, access)
 
 
-def map_buffer_range(target: BufferTargetARB, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) raises:
+def map_buffer_range(target: BufferTargetARB, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) raises -> Optional[Ptr[NoneType, MutUntrackedOrigin]]:
     return get_fn[glMapBufferRange, "glMapBufferRange"]()(target, offset, length, access)
 
 
-def map_named_buffer(buffer: GLuint, access: BufferAccessARB) raises:
+def map_named_buffer(buffer: GLuint, access: BufferAccessARB) raises -> Optional[Ptr[NoneType, MutUntrackedOrigin]]:
     return get_fn[glMapNamedBuffer, "glMapNamedBuffer"]()(buffer, access)
 
 
-def map_named_buffer_range(buffer: GLuint, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) raises:
+def map_named_buffer_range(buffer: GLuint, offset: GLintptr, length: GLsizeiptr, access: MapBufferAccessMask) raises -> Optional[Ptr[NoneType, MutUntrackedOrigin]]:
     return get_fn[glMapNamedBufferRange, "glMapNamedBufferRange"]()(buffer, offset, length, access)
 
 
@@ -7572,14 +7594,14 @@ def normal_p3uiv[O_coords: Origin, //](type: NormalPointerType, coords: Ptr[GLui
 
 
 def object_label(identifier: ObjectIdentifier, name: GLuint, length: GLsizei, var label: String) raises:
-    return get_fn[glObjectLabel, "glObjectLabel"]()(identifier, name, length, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(label.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glObjectLabel, "glObjectLabel"]()(identifier, name, length, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(label.as_c_string_slice().ptr())))
 
 
 def object_ptr_label[O_ptr: Origin, //](ptr: Optional[Ptr[NoneType, O_ptr]], length: GLsizei, var label: String) raises:
     var ffi_ptr: Optional[Ptr[NoneType, ImmutAnyOrigin]] = None
     if ptr:
         ffi_ptr = Ptr[NoneType, ImmutAnyOrigin](unsafe_from_address=Int(ptr.value()))
-    return get_fn[glObjectPtrLabel, "glObjectPtrLabel"]()(ffi_ptr, length, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(label.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glObjectPtrLabel, "glObjectPtrLabel"]()(ffi_ptr, length, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(label.as_c_string_slice().ptr())))
 
 
 def patch_parameterfv[O_values: Origin, //](pname: PatchParameterName, values: Ptr[GLfloat, O_values]) raises:
@@ -7858,7 +7880,7 @@ def provoking_vertex(mode: VertexProvokingMode) raises:
 
 
 def push_debug_group(source: DebugSource, id: GLuint, length: GLsizei, var message: String) raises:
-    return get_fn[glPushDebugGroup, "glPushDebugGroup"]()(source, id, length, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(message.as_c_string_slice().unsafe_ptr())))
+    return get_fn[glPushDebugGroup, "glPushDebugGroup"]()(source, id, length, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(message.as_c_string_slice().ptr())))
 
 
 def query_counter(id: GLuint, target: QueryCounterTarget) raises:
@@ -7963,8 +7985,8 @@ def shader_binary[O_shaders: Origin, O_binary: Origin, //](count: GLsizei, shade
 
 
 def shader_source[O_length: Origin, //](shader: GLuint, count: GLsizei, var string: List[String], length: Ptr[GLint, O_length]) raises:
-    var c_list = [UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().unsafe_ptr())) for ref str in string]
-    return get_fn[glShaderSource, "glShaderSource"]()(shader, count, UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())), Ptr[GLint, ImmutAnyOrigin](unsafe_from_address=Int(length)))
+    var c_list = [Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().ptr())) for ref str in string]
+    return get_fn[glShaderSource, "glShaderSource"]()(shader, count, Ptr[mut=False, Ptr[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())), Ptr[GLint, ImmutAnyOrigin](unsafe_from_address=Int(length)))
 
 
 def shader_storage_block_binding(program: GLuint, storage_block_index: GLuint, storage_block_binding: GLuint) raises:
@@ -7972,7 +7994,7 @@ def shader_storage_block_binding(program: GLuint, storage_block_index: GLuint, s
 
 
 def specialize_shader[O_p_constant_index: Origin, O_p_constant_value: Origin, //](shader: GLuint, var p_entry_point: String, num_specialization_constants: GLuint, p_constant_index: Ptr[GLuint, O_p_constant_index], p_constant_value: Ptr[GLuint, O_p_constant_value]) raises:
-    return get_fn[glSpecializeShader, "glSpecializeShader"]()(shader, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(p_entry_point.as_c_string_slice().unsafe_ptr())), num_specialization_constants, Ptr[GLuint, ImmutAnyOrigin](unsafe_from_address=Int(p_constant_index)), Ptr[GLuint, ImmutAnyOrigin](unsafe_from_address=Int(p_constant_value)))
+    return get_fn[glSpecializeShader, "glSpecializeShader"]()(shader, Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(p_entry_point.as_c_string_slice().ptr())), num_specialization_constants, Ptr[GLuint, ImmutAnyOrigin](unsafe_from_address=Int(p_constant_index)), Ptr[GLuint, ImmutAnyOrigin](unsafe_from_address=Int(p_constant_value)))
 
 
 def stencil_func(func: StencilFunction, ref_: GLint, mask: GLuint) raises:
@@ -8223,8 +8245,8 @@ def transform_feedback_buffer_range(xfb: GLuint, index: GLuint, buffer: GLuint, 
 
 
 def transform_feedback_varyings(program: GLuint, count: GLsizei, var varyings: List[String], buffer_mode: TransformFeedbackBufferMode) raises:
-    var c_list = [UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().unsafe_ptr())) for ref str in varyings]
-    return get_fn[glTransformFeedbackVaryings, "glTransformFeedbackVaryings"]()(program, count, UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())), buffer_mode)
+    var c_list = [Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().ptr())) for ref str in varyings]
+    return get_fn[glTransformFeedbackVaryings, "glTransformFeedbackVaryings"]()(program, count, Ptr[mut=False, Ptr[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr())), buffer_mode)
 
 
 def uniform1d(location: GLint, x: GLdouble) raises:
@@ -8869,7 +8891,7 @@ def wait_sync(sync: GLsync, flags: SyncBehaviorFlags, timeout: GLuint64) raises:
 
 
 def init_gl_version_1_0(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBlendFunc"] = load_fn_ptr("glBlendFunc", load)
     table[]["glClear"] = load_fn_ptr("glClear", load)
     table[]["glClearColor"] = load_fn_ptr("glClearColor", load)
@@ -8921,7 +8943,7 @@ def init_gl_version_1_0(load: LoadProc) raises:
 
 
 def init_gl_version_1_1(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBindTexture"] = load_fn_ptr("glBindTexture", load)
     table[]["glCopyTexImage1D"] = load_fn_ptr("glCopyTexImage1D", load)
     table[]["glCopyTexImage2D"] = load_fn_ptr("glCopyTexImage2D", load)
@@ -8938,7 +8960,7 @@ def init_gl_version_1_1(load: LoadProc) raises:
 
 
 def init_gl_version_1_2(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glCopyTexSubImage3D"] = load_fn_ptr("glCopyTexSubImage3D", load)
     table[]["glDrawRangeElements"] = load_fn_ptr("glDrawRangeElements", load)
     table[]["glTexImage3D"] = load_fn_ptr("glTexImage3D", load)
@@ -8946,7 +8968,7 @@ def init_gl_version_1_2(load: LoadProc) raises:
 
 
 def init_gl_version_1_3(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glActiveTexture"] = load_fn_ptr("glActiveTexture", load)
     table[]["glCompressedTexImage1D"] = load_fn_ptr("glCompressedTexImage1D", load)
     table[]["glCompressedTexImage2D"] = load_fn_ptr("glCompressedTexImage2D", load)
@@ -8959,7 +8981,7 @@ def init_gl_version_1_3(load: LoadProc) raises:
 
 
 def init_gl_version_1_4(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBlendColor"] = load_fn_ptr("glBlendColor", load)
     table[]["glBlendEquation"] = load_fn_ptr("glBlendEquation", load)
     table[]["glBlendFuncSeparate"] = load_fn_ptr("glBlendFuncSeparate", load)
@@ -8972,7 +8994,7 @@ def init_gl_version_1_4(load: LoadProc) raises:
 
 
 def init_gl_version_1_5(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBeginQuery"] = load_fn_ptr("glBeginQuery", load)
     table[]["glBindBuffer"] = load_fn_ptr("glBindBuffer", load)
     table[]["glBufferData"] = load_fn_ptr("glBufferData", load)
@@ -8995,7 +9017,7 @@ def init_gl_version_1_5(load: LoadProc) raises:
 
 
 def init_gl_version_2_0(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glAttachShader"] = load_fn_ptr("glAttachShader", load)
     table[]["glBindAttribLocation"] = load_fn_ptr("glBindAttribLocation", load)
     table[]["glBlendEquationSeparate"] = load_fn_ptr("glBlendEquationSeparate", load)
@@ -9092,7 +9114,7 @@ def init_gl_version_2_0(load: LoadProc) raises:
 
 
 def init_gl_version_2_1(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glUniformMatrix2x3fv"] = load_fn_ptr("glUniformMatrix2x3fv", load)
     table[]["glUniformMatrix2x4fv"] = load_fn_ptr("glUniformMatrix2x4fv", load)
     table[]["glUniformMatrix3x2fv"] = load_fn_ptr("glUniformMatrix3x2fv", load)
@@ -9102,7 +9124,7 @@ def init_gl_version_2_1(load: LoadProc) raises:
 
 
 def init_gl_version_3_0(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBeginConditionalRender"] = load_fn_ptr("glBeginConditionalRender", load)
     table[]["glBeginTransformFeedback"] = load_fn_ptr("glBeginTransformFeedback", load)
     table[]["glBindBufferBase"] = load_fn_ptr("glBindBufferBase", load)
@@ -9190,7 +9212,7 @@ def init_gl_version_3_0(load: LoadProc) raises:
 
 
 def init_gl_version_3_1(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glCopyBufferSubData"] = load_fn_ptr("glCopyBufferSubData", load)
     table[]["glDrawArraysInstanced"] = load_fn_ptr("glDrawArraysInstanced", load)
     table[]["glDrawElementsInstanced"] = load_fn_ptr("glDrawElementsInstanced", load)
@@ -9206,7 +9228,7 @@ def init_gl_version_3_1(load: LoadProc) raises:
 
 
 def init_gl_version_3_2(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glClientWaitSync"] = load_fn_ptr("glClientWaitSync", load)
     table[]["glDeleteSync"] = load_fn_ptr("glDeleteSync", load)
     table[]["glDrawElementsBaseVertex"] = load_fn_ptr("glDrawElementsBaseVertex", load)
@@ -9229,7 +9251,7 @@ def init_gl_version_3_2(load: LoadProc) raises:
 
 
 def init_gl_version_3_3(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBindFragDataLocationIndexed"] = load_fn_ptr("glBindFragDataLocationIndexed", load)
     table[]["glBindSampler"] = load_fn_ptr("glBindSampler", load)
     table[]["glColorP3ui"] = load_fn_ptr("glColorP3ui", load)
@@ -9291,7 +9313,7 @@ def init_gl_version_3_3(load: LoadProc) raises:
 
 
 def init_gl_version_4_0(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBeginQueryIndexed"] = load_fn_ptr("glBeginQueryIndexed", load)
     table[]["glBindTransformFeedback"] = load_fn_ptr("glBindTransformFeedback", load)
     table[]["glBlendEquationSeparatei"] = load_fn_ptr("glBlendEquationSeparatei", load)
@@ -9341,7 +9363,7 @@ def init_gl_version_4_0(load: LoadProc) raises:
 
 
 def init_gl_version_4_1(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glActiveShaderProgram"] = load_fn_ptr("glActiveShaderProgram", load)
     table[]["glBindProgramPipeline"] = load_fn_ptr("glBindProgramPipeline", load)
     table[]["glClearDepthf"] = load_fn_ptr("glClearDepthf", load)
@@ -9433,7 +9455,7 @@ def init_gl_version_4_1(load: LoadProc) raises:
 
 
 def init_gl_version_4_2(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBindImageTexture"] = load_fn_ptr("glBindImageTexture", load)
     table[]["glDrawArraysInstancedBaseInstance"] = load_fn_ptr("glDrawArraysInstancedBaseInstance", load)
     table[]["glDrawElementsInstancedBaseInstance"] = load_fn_ptr("glDrawElementsInstancedBaseInstance", load)
@@ -9449,7 +9471,7 @@ def init_gl_version_4_2(load: LoadProc) raises:
 
 
 def init_gl_version_4_3(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBindVertexBuffer"] = load_fn_ptr("glBindVertexBuffer", load)
     table[]["glClearBufferData"] = load_fn_ptr("glClearBufferData", load)
     table[]["glClearBufferSubData"] = load_fn_ptr("glClearBufferSubData", load)
@@ -9496,7 +9518,7 @@ def init_gl_version_4_3(load: LoadProc) raises:
 
 
 def init_gl_version_4_4(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBindBuffersBase"] = load_fn_ptr("glBindBuffersBase", load)
     table[]["glBindBuffersRange"] = load_fn_ptr("glBindBuffersRange", load)
     table[]["glBindImageTextures"] = load_fn_ptr("glBindImageTextures", load)
@@ -9509,7 +9531,7 @@ def init_gl_version_4_4(load: LoadProc) raises:
 
 
 def init_gl_version_4_5(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glBindTextureUnit"] = load_fn_ptr("glBindTextureUnit", load)
     table[]["glBlitNamedFramebuffer"] = load_fn_ptr("glBlitNamedFramebuffer", load)
     table[]["glCheckNamedFramebufferStatus"] = load_fn_ptr("glCheckNamedFramebufferStatus", load)
@@ -9635,7 +9657,7 @@ def init_gl_version_4_5(load: LoadProc) raises:
 
 
 def init_gl_version_4_6(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     table[]["glMultiDrawArraysIndirectCount"] = load_fn_ptr("glMultiDrawArraysIndirectCount", load)
     table[]["glMultiDrawElementsIndirectCount"] = load_fn_ptr("glMultiDrawElementsIndirectCount", load)
     table[]["glPolygonOffsetClamp"] = load_fn_ptr("glPolygonOffsetClamp", load)

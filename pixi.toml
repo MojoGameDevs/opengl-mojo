@@ -7,25 +7,25 @@ platforms = ["linux-64"]
 
 [package]
 name = "opengl-mojo"
-version = "0.0.20"
+version = "0.1.0"
 license-file = "LICENSE"
 authors.workspace = true
 
 [package.build.backend]
 name="pixi-build-mojo"
-version = "0.1.*"
+version = "0.2.*"
 
 [package.build.config.pkg]
 name = "opengl"
 
 [package.host-dependencies]
-mojo-compiler = ">=1.0.0b1.dev2026042717"
+mojo-compiler = ">=1.1.0.dev2026082605"
 
 [package.build-dependencies]
-mojo-compiler = ">=1.0.0b1.dev2026042717"
+mojo-compiler = ">=1.1.0.dev2026082605"
 
 [package.run-dependencies]
-mojo-compiler = ">=1.0.0b1.dev2026042717"
+mojo-compiler = ">=1.1.0.dev2026082605"
 
 [tasks]
 fmt = "mojo format -l 1000 src"
@@ -37,8 +37,8 @@ example = "mojo run examples/hello.mojo"
 
 [dependencies]
 libopengl = ">=1.7.0,<2"
-mojo = ">=1.0.0b1.dev2026042717"
-sdl-mojo = { git = "https://github.com/MojoGameDevs/sdl-mojo.git" }
+mojo = ">=1.1.0.dev2026082605"
+sdl-mojo = { path = "../sdl-mojo" }
 
 [feature.dev.pypi-dependencies]
 ipython = "*"

@@ -173,18 +173,40 @@ class CommandEl:
 class ReturnType(CommandEl):
     """Return type of OpenGL command"""
 
+    ptrs: int = 0
+    const: bool = False
+
     @classmethod
     def from_xml(cls, proto_el: ET.Element) -> "ReturnType":
+        text = ET.tostring(proto_el, method="text", encoding="unicode")
+        qualifiers = text[: text.index(proto_el.find("name").text)]
         return cls(
             type=getattr(proto_el.find("ptype"), "text", None),
             group=proto_el.attrib.get("group"),
+            ptrs=qualifiers.count("*"),
+            const="const" in qualifiers,
         )
 
     def __bool__(self):
-        return bool(self.type)
+        return bool(self.type) or bool(self.ptrs)
+
+    def is_string(self) -> bool:
+        """A `const GLubyte *` return is a null terminated string owned by the driver."""
+        return self.ptrs == 1 and self.const and self.type == "GLubyte"
 
     def __str__(self):
-        return self.group or self.type
+        """The type the loaded function pointer returns."""
+        if not self.ptrs:
+            return self.group or self.type
+        origin = "ImmUntrackedOrigin" if self.const else "MutUntrackedOrigin"
+        result = self.group or self.type or "NoneType"
+        for _ in range(self.ptrs):
+            result = f"Ptr[{result}, {origin}]"
+        return f"Optional[{result}]"
+
+    def mojo(self) -> str:
+        """The type the generated wrapper returns."""
+        return "String" if self.is_string() else str(self)
 
 
 @dataclass
@@ -222,7 +244,7 @@ class CommandParam(CommandEl):
             return result
         name = to_snake_case(self.name)
         type = self.to_mojo_arg_inner().split(": ")[1]
-        if "GLchar" in type:
+        if self.is_c_string():
             type = re.sub(r"Ptr\[\s*GLchar(?:[^\[\]]*|\[[^\]]*\])*\]", "String", type)
             name = "var " + name
             if "Ptr" in type:
@@ -242,8 +264,12 @@ class CommandParam(CommandEl):
     def is_nullable_pointer(self) -> bool:
         return self.type == "void" and len(re.findall(r"\*", self.ptrs)) == 1
 
+    def is_c_string(self) -> bool:
+        """A `const GLchar *` is an input string; a mutable one is an output buffer."""
+        return "GLchar" in self.type and "const" in self.ptrs
+
     def origin_generic(self) -> str:
-        if self.ptrs and "GLchar" not in self.type:
+        if self.ptrs and not self.is_c_string():
             return f"O_{to_snake_case(self.name)}: Origin"
         return ""
 
@@ -255,8 +281,6 @@ class CommandParam(CommandEl):
         ptr_tokens = re.findall(r"\*\s*(const)?", self.ptrs)
         for const_modifier in reversed(ptr_tokens):
             is_mutable = not bool(const_modifier)
-            if type == "GLchar":
-                is_mutable = False
             origin = "ImmutAnyOrigin" if not is_mutable else "MutAnyOrigin"
             type = f"Ptr[{type}, {origin}]"
         return f"{to_snake_case(self.name)}: {type}"
@@ -266,8 +290,8 @@ class CommandParam(CommandEl):
         snake_name = to_snake_case(self.name)
         if self.is_nullable_pointer():
             return f"ffi_{snake_name}"
-        if "GLchar" in self.type:
-            return f"UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int({snake_name}.as_c_string_slice().unsafe_ptr()))"
+        if self.is_c_string():
+            return f"Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int({snake_name}.as_c_string_slice().ptr()))"
         if "Bool" in self.to_mojo_arg():
             return f"GLboolean(Int({snake_name}))"
         if self.ptrs:
@@ -314,7 +338,7 @@ class Command:
     def _fn_str(self, anon=False):
         res = "def "
         if not anon:
-            res += f" {self.mojo_name()}"
+            res += f"{self.mojo_name()}"
         generics = [p.origin_generic() for p in self.params if p.origin_generic()] if not anon else []
         if generics:
             res += f"[{', '.join(g for g in generics if g)}, //]"
@@ -324,7 +348,7 @@ class Command:
         else:
             res += ' thin abi("C")'
         if self.return_type:
-            res += f" -> {self.return_type}"
+            res += f" -> {self.return_type if anon else self.return_type.mojo()}"
         return res
 
     def fn_body(self):
@@ -333,10 +357,19 @@ class Command:
         body = "".join(p.ffi_setup() for p in self.params)
         if str_list:
             str_list = str_list[0]
-            call_args[call_args.index(str_list.get_call_expr())] = "UnsafePointer[mut=False, UnsafePointer[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr()))"
-            body += f"""\n    var c_list = [UnsafePointer[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().unsafe_ptr())) for ref str in {to_snake_case(str_list.name)}]"""
-        body += f"""
-    return get_fn[{self.inner_name()}, "{self.name}"]()({", ".join(call_args)})
+            call_args[call_args.index(str_list.get_call_expr())] = "Ptr[mut=False, Ptr[mut=False, GLchar, ImmutAnyOrigin], ImmutAnyOrigin](unsafe_from_address=Int(c_list.unsafe_ptr()))"
+            body += f"""\n    var c_list = [Ptr[mut=False, GLchar, ImmutAnyOrigin](unsafe_from_address=Int(str.as_c_string_slice().ptr())) for ref str in {to_snake_case(str_list.name)}]"""
+        call = f'get_fn[{self.inner_name()}, "{self.name}"]()({", ".join(call_args)})'
+        if self.return_type.is_string():
+            body += f"""
+    var result = {call}
+    if not result:
+        raise Error("{self.name} returned null")
+    return gl_string(result.value())
+"""
+        else:
+            body += f"""
+    return {call}
 """
         return body
 
@@ -388,7 +421,7 @@ class Feature:
     def init_fns(self, registry: "OpenGLRegistry") -> str:
         return f"""
 def init_{self.name.lower()}(load: LoadProc) raises:
-    table = func_table.get_or_create_ptr()
+    var table = func_table.get_or_create_ptr()
     {"\n    ".join(f.fn_init() for f in registry.current_commands if f.name in self.require)}
     """
 
@@ -461,10 +494,10 @@ def generate_mojo_file(registry: OpenGLRegistry, path: str):
 
         f.write(
             """
-from std.ffi import _Global, c_char, c_int, c_uint, c_short, c_ushort, c_size_t, c_ssize_t, c_float, c_double
+from std.ffi import CStringSlice, _Global, c_char, c_int, c_uint, c_short, c_ushort, c_size_t, c_ssize_t, c_float, c_double
 from std.memory import OpaquePointer
 from std.os import abort
-comptime Ptr = UnsafePointer
+comptime Ptr = Pointer
 
 # ========= TYPES =========\n\n"""
         )
@@ -472,7 +505,12 @@ comptime Ptr = UnsafePointer
             f.write(f"{type}\n")
         f.write(
             """
-comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar, ImmutAnyOrigin], user_param: OpaquePointer) thin abi("C")
+comptime GLDEBUGPROC = def(source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: Ptr[GLchar, ImmutAnyOrigin], user_param: OpaquePointer[MutUntrackedOrigin]) thin abi("C")
+
+
+def gl_string[origin: ImmOrigin, //](ptr: Ptr[mut=False, GLubyte, origin]) -> String:
+    \"\"\"Copies a null terminated string owned by the driver into an owned String.\"\"\"
+    return String(StringSpan(unsafe_from_utf8=CStringSlice(unsafe_from_ptr=ptr.unsafe_bitcast[c_char]())))
 """
         )
         f.write(
@@ -496,13 +534,13 @@ comptime func_table = _Global["table", _init_empty_table]()
 @always_inline
 def load_fn_ptr(name: String, load: LoadProc) raises -> FuncPtr:
     var func = load(name)
-    return UnsafePointer(to=func).bitcast[FuncPtr]()[]
+    return Ptr(to=func).unsafe_bitcast[FuncPtr]()[]
 
 
 @always_inline
 def get_fn[fn_type: ImplicitlyCopyable, name: StaticString]() raises -> fn_type:
     var ptr = func_table.get_or_create_ptr()[][name]
-    return UnsafePointer(to=ptr).bitcast[fn_type]()[] 
+    return Ptr(to=ptr).unsafe_bitcast[fn_type]()[] 
 """
         )
         ptr_decls = [func.ptr_decl() for func in registry.current_commands]

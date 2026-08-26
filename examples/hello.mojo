@@ -13,9 +13,9 @@ def main() raises:
     sdl.gl_set_attribute(sdl.GLAttr.GL_CONTEXT_MINOR_VERSION, 2)
     sdl.gl_set_attribute(sdl.GLAttr.GL_DOUBLEBUFFER, 1)
     
-    window = sdl.create_window("SDL Window", 1024, 768, sdl.WindowFlags.WINDOW_RESIZABLE | sdl.WindowFlags.WINDOW_OPENGL | sdl.WindowFlags.WINDOW_TRANSPARENT)
+    var window = sdl.create_window("SDL Window", 1024, 768, sdl.WindowFlags.WINDOW_RESIZABLE | sdl.WindowFlags.WINDOW_OPENGL | sdl.WindowFlags.WINDOW_TRANSPARENT)
 
-    context = sdl.gl_create_context(window)
+    var context = sdl.gl_create_context(window)
     sdl.gl_make_current(window, context)
 
     init_opengl(load_gl_proc)

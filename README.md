@@ -13,9 +13,9 @@ This code is far from production ready, so if you find any issues, please open a
 To run opengl in mojo, you need to have a windowing system.
 For example, you can use [SDL3 bindings](https://github.com/MojoGameDevs/sdl-mojo). To reference `sdl` and `opengl` packages, you have to place them into your project like submodules.
 
-To build all the dependencies and start the example, run 
+To build the bindings and start the example, run 
 ```sh
-pixi run setup && pixi run example
+pixi run build && pixi run example
 ```
 
 ### Example output for a Basic Triangle Shader
