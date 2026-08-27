@@ -38,7 +38,7 @@ example = "mojo run examples/hello.mojo"
 [dependencies]
 libopengl = ">=1.7.0,<2"
 mojo = ">=1.1.0.dev2026082605"
-sdl-mojo = { path = "../sdl-mojo" }
+sdl-mojo = { git = "https://github.com/MojoGameDevs/sdl-mojo.git" }
 
 [feature.dev.pypi-dependencies]
 ipython = "*"

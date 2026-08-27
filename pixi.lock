@@ -109,7 +109,7 @@ environments:
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-compiler-1.1.0.dev2026082605-release.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.6.0.dev2026082605-release.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mojo-python-1.1.0.dev2026082605-release.conda
-      - conda_source: sdl-mojo[1caf7421] @ ../sdl-mojo
+      - conda_source: sdl-mojo[936ad256] @ git+https://github.com/mojogamedevs/sdl-mojo#d0a42956dede3c9bbcfcfe0c21af7e4215b1551d
   dev:
     channels:
     - url: https://conda.modular.com/max-nightly/
@@ -216,7 +216,7 @@ environments:
       - conda: https://conda.modular.com/max-nightly/linux-64/mojo-compiler-1.1.0.dev2026082605-release.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mblack-26.6.0.dev2026082605-release.conda
       - conda: https://conda.modular.com/max-nightly/noarch/mojo-python-1.1.0.dev2026082605-release.conda
-      - conda_source: sdl-mojo[1caf7421] @ ../sdl-mojo
+      - conda_source: sdl-mojo[936ad256] @ git+https://github.com/mojogamedevs/sdl-mojo#d0a42956dede3c9bbcfcfe0c21af7e4215b1551d
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/41/09/5b161152e2d90f7b87f781c2e1267494aef9c32498df793f73ad0a0a494a/matplotlib_inline-0.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/54/6f/84908cad2d6aa5144abcf7b42709fe4fdb459bc640ec7ac5786e7693dabc/prompt_toolkit-3.0.53-py3-none-any.whl
@@ -438,6 +438,7 @@ packages:
   - __glibc >=2.17,<3.0.a0
   - libgcc >=15
   license: MIT
+  license_family: MIT
   purls: []
   run_exports:
     weak:
@@ -1800,7 +1801,10 @@ packages:
   run_exports: {}
   size: 24227
   timestamp: 1787721742928
-- conda_source: sdl-mojo[1caf7421] @ ../sdl-mojo
+- conda_source: sdl-mojo[936ad256] @ git+https://github.com/mojogamedevs/sdl-mojo#d0a42956dede3c9bbcfcfe0c21af7e4215b1551d
+  version: 0.2.0
+  build: hb0f4dca_0
+  subdir: linux-64
   variants:
     target_platform: linux-64
   depends:
